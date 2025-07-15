@@ -26,14 +26,28 @@ void search_serial(char files[][512], int file_count, const char *pattern, int m
 
 void search_openmp(char files[][512], int file_count, const char *pattern, int mode)
 {
+  omp_set_num_threads(16);
+
+  // Print the actual number of threads used
+  #pragma omp parallel
+  {
+    #pragma omp single
+    {
+      int actual_threads = omp_get_num_threads();
+      printf("[OPENMP] Using %d threads\n", actual_threads);
+    }
+  }
+
   int found = 0;
 
-#pragma omp parallel for schedule(dynamic)
+  // each thread will select files dynamically to search
+  #pragma omp parallel for schedule(dynamic)
   for (int i = 0; i < file_count; i++)
   {
     if (do_search(files[i], pattern, mode))
     {
-#pragma omp critical
+      // only one thread can print at a time 
+      #pragma omp critical
       {
         printf("[OPENMP] Thread %d found in %s\n", omp_get_thread_num(), files[i]);
         found = 1;
@@ -43,6 +57,29 @@ void search_openmp(char files[][512], int file_count, const char *pattern, int m
 
   if (!found)
     printf("[OPENMP] No match found.\n");
+}
+
+
+void search_mpi(char files[][512], int file_count, const char *pattern, int mode, int rank, int size)
+{
+  int found = 0;
+
+  for (int i = rank; i < file_count; i += size)
+  {
+    if (do_search(files[i], pattern, mode))
+    {
+      printf("[MPI] Rank %d found in %s\n", rank, files[i]);
+      found = 1;
+    }
+  }
+
+  int global_found;
+  MPI_Reduce(&found, &global_found, 1, MPI_INT, MPI_LOR, 0, MPI_COMM_WORLD);
+
+  if (rank == 0 && !global_found)
+  {
+    printf("[MPI] No match found.\n");
+  }
 }
 
 void search_mpi_openmp(char files[][512], int file_count, const char *pattern, int mode, int rank, int size)
@@ -106,29 +143,43 @@ int main(int argc, char *argv[])
   MPI_Bcast(&file_count, 1, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Bcast(files, MAX_FILES * 512, MPI_CHAR, 0, MPI_COMM_WORLD);
 
-  // Run serial (rank 0 only)
+  
   if (rank == 0)
   {
+    // Run serial (rank 0 only)
     double t1 = get_time_in_seconds();
     search_serial(files, file_count, pattern, mode);
     double t2 = get_time_in_seconds();
-    printf("⏱️ [SERIAL] Time: %.4f seconds\n\n", t2 - t1);
+    printf("[SERIAL] Time: %.4f seconds\n\n", t2 - t1);
 
+    // Run with OpenMP (rank 0 only) 
     t1 = get_time_in_seconds();
     search_openmp(files, file_count, pattern, mode);
     t2 = get_time_in_seconds();
-    printf("⏱️ [OPENMP] Time: %.4f seconds\n\n", t2 - t1);
+    printf("[OPENMP] Time: %.4f seconds\n\n", t2 - t1);
+  }
+
+  // All ranks run MPI-only
+  MPI_Barrier(MPI_COMM_WORLD);
+  double t1 = MPI_Wtime();
+  search_mpi(files, file_count, pattern, mode, rank, size);
+  double t2 = MPI_Wtime();
+
+  if (rank == 0)
+  {
+    printf("[MPI] Time: %.4f seconds\n\n", t2 - t1);
   }
 
   // All ranks run MPI+OpenMP
   MPI_Barrier(MPI_COMM_WORLD);
-  double t1 = MPI_Wtime();
+  double t3 = MPI_Wtime();
   search_mpi_openmp(files, file_count, pattern, mode, rank, size);
-  double t2 = MPI_Wtime();
+  double t4 = MPI_Wtime();
 
   if (rank == 0)
-    printf("⏱️ [MPI+OPENMP] Time: %.4f seconds\n", t2 - t1);
+    printf("[MPI+OPENMP] Time: %.4f seconds\n", t4 - t3);
 
+  // Finalize MPI
   MPI_Finalize();
   return 0;
 }
