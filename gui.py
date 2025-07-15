@@ -4,6 +4,7 @@ import subprocess
 import time
 import os
 
+# open a folder
 def browse_folder():
     folder = filedialog.askdirectory()
     if folder:
