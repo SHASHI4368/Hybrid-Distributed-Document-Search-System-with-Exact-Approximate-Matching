@@ -153,31 +153,31 @@ int main(int argc, char *argv[])
     printf("[SERIAL] Time: %.4f seconds\n\n", t2 - t1);
 
     // Run with OpenMP (rank 0 only) 
-    t1 = get_time_in_seconds();
+    double t3 = get_time_in_seconds();
     search_openmp(files, file_count, pattern, mode);
-    t2 = get_time_in_seconds();
-    printf("[OPENMP] Time: %.4f seconds\n\n", t2 - t1);
+    double t4 = get_time_in_seconds();
+    printf("[OPENMP] Time: %.4f seconds\n\n", t4 - t3);
   }
 
   // All ranks run MPI-only
   MPI_Barrier(MPI_COMM_WORLD);
-  double t1 = MPI_Wtime();
+  double t5 = MPI_Wtime();
   search_mpi(files, file_count, pattern, mode, rank, size);
-  double t2 = MPI_Wtime();
+  double t6 = MPI_Wtime();
 
   if (rank == 0)
   {
-    printf("[MPI] Time: %.4f seconds\n\n", t2 - t1);
+    printf("[MPI] Time: %.4f seconds\n\n", t6 - t5);
   }
 
   // All ranks run MPI+OpenMP
   MPI_Barrier(MPI_COMM_WORLD);
-  double t3 = MPI_Wtime();
+  double t7 = MPI_Wtime();
   search_mpi_openmp(files, file_count, pattern, mode, rank, size);
-  double t4 = MPI_Wtime();
+  double t8 = MPI_Wtime();
 
   if (rank == 0)
-    printf("[MPI+OPENMP] Time: %.4f seconds\n", t4 - t3);
+    printf("[MPI+OPENMP] Time: %.4f seconds\n", t8 - t7);
 
   // Finalize MPI
   MPI_Finalize();

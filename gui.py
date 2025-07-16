@@ -11,8 +11,18 @@ def browse_folder():
         folder_entry.delete(0, tk.END)
         folder_entry.insert(0, folder)
 
+def count_supported_files(folder):
+    supported_exts = ('.txt', '.pdf', '.docx')
+    count = 0
+    for entry in os.listdir(folder):
+        if entry.lower().endswith(supported_exts):
+            count += 1
+    return count
+        
+
 def run_search():
     docs_folder = folder_entry.get().strip()
+    total_files = count_supported_files(docs_folder)
     pattern = pattern_entry.get().strip()
     mode = "0" if mode_var.get() == "Exact" else "1"
     np = processes_entry.get().strip()
@@ -55,6 +65,9 @@ def run_search():
 
     if match_count == 0:
         output_text.insert(tk.END, "No match found.\n")
+
+    output_text.insert(tk.END, f"\n📂 Total Files Searched: {total_files}")
+    output_text.insert(tk.END, f"\n✅ Total Matches Found:  {match_count}")
 
     # === TIMINGS ===
     output_text.insert(tk.END, "\n⏱️ Execution Times\n", "heading")
