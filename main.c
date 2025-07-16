@@ -59,7 +59,6 @@ void search_openmp(char files[][512], int file_count, const char *pattern, int m
     printf("[OPENMP] No match found.\n");
 }
 
-
 void search_mpi(char files[][512], int file_count, const char *pattern, int mode, int rank, int size)
 {
   int found = 0;
@@ -135,51 +134,66 @@ int main(int argc, char *argv[])
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
+  // === SERIAL ===
   if (rank == 0)
   {
-    preprocess_files(docs_dir, "/tmp/docsearch", files, &file_count);
-  }
-
-  MPI_Bcast(&file_count, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Bcast(files, MAX_FILES * 512, MPI_CHAR, 0, MPI_COMM_WORLD);
-
-  
-  if (rank == 0)
-  {
-    // Run serial (rank 0 only)
+    file_count = 0;
     double t1 = get_time_in_seconds();
+    preprocess_files(docs_dir, "/tmp/doc_serial", files, &file_count, 1);
     search_serial(files, file_count, pattern, mode);
     double t2 = get_time_in_seconds();
     printf("[SERIAL] Time: %.4f seconds\n\n", t2 - t1);
+  }
 
-    // Run with OpenMP (rank 0 only) 
+  // === OPENMP ===
+  if (rank == 0)
+  {
+    file_count = 0;
     double t3 = get_time_in_seconds();
+    preprocess_files(docs_dir, "/tmp/doc_openmp", files, &file_count, 2);
     search_openmp(files, file_count, pattern, mode);
     double t4 = get_time_in_seconds();
     printf("[OPENMP] Time: %.4f seconds\n\n", t4 - t3);
   }
 
-  // All ranks run MPI-only
+  // === MPI ===
   MPI_Barrier(MPI_COMM_WORLD);
   double t5 = MPI_Wtime();
+  
+  // Only rank 0 does preprocessing
+  if (rank == 0) {
+    file_count = 0;
+    preprocess_files(docs_dir, "/tmp/doc_mpi", files, &file_count, 3);
+  }
+  
+  // Broadcast results to all processes
+  MPI_Bcast(&file_count, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(files, MAX_FILES * 512, MPI_CHAR, 0, MPI_COMM_WORLD);
+
   search_mpi(files, file_count, pattern, mode, rank, size);
   double t6 = MPI_Wtime();
-
   if (rank == 0)
-  {
     printf("[MPI] Time: %.4f seconds\n\n", t6 - t5);
-  }
 
-  // All ranks run MPI+OpenMP
+  // === MPI + OpenMP ===
   MPI_Barrier(MPI_COMM_WORLD);
   double t7 = MPI_Wtime();
+  
+  // Only rank 0 does preprocessing
+  if (rank == 0) {
+    file_count = 0;
+    preprocess_files(docs_dir, "/tmp/doc_hybrid", files, &file_count, 4);
+  }
+  
+  // Broadcast results to all processes
+  MPI_Bcast(&file_count, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(files, MAX_FILES * 512, MPI_CHAR, 0, MPI_COMM_WORLD);
+
   search_mpi_openmp(files, file_count, pattern, mode, rank, size);
   double t8 = MPI_Wtime();
-
   if (rank == 0)
     printf("[MPI+OPENMP] Time: %.4f seconds\n", t8 - t7);
 
-  // Finalize MPI
   MPI_Finalize();
   return 0;
 }
