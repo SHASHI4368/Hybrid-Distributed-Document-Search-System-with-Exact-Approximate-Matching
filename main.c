@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
   double t8 = MPI_Wtime();
 
   if (rank == 0)
-    printf("[MPI+OPENMP] Time: %.4f seconds\n", t4 - t3);
+    printf("[MPI+OPENMP] Time: %.4f seconds\n", t8 - t7);
 
   // Finalize MPI
   MPI_Finalize();
